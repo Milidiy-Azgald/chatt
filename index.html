@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Firebase Чат</title>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
+  <style>
+    body { font-family: sans-serif; background: #f9f9f9; padding: 20px; }
+    #chat { max-width: 600px; margin: auto; background: #fff; padding: 20px; border-radius: 8px; }
+    #messages { height: 300px; overflow-y: scroll; border: 1px solid #ccc; padding: 10px; margin-bottom: 10px; }
+    .message { padding: 5px; border-bottom: 1px solid #eee; }
+    .message small { color: gray; float: right; }
+    .controls { margin-top: 10px; }
+    button { margin-left: 5px; }
+  </style>
+</head>
+<body>
+<div id="chat">
+  <h2>Чат</h2>
+  <div id="user-info"></div>
+  <button id="sign-in">Увійти через Google</button>
+  <button id="sign-out" style="display:none">Вийти</button>
+  <div id="messages"></div>
+  <div class="controls">
+    <input id="message-input" placeholder="Ваше повідомлення" style="width: 70%">
+    <button id="send">Надіслати</button>
+  </div>
+</div>
+
+<script>
+  const firebaseConfig = {
+    apiKey: "AIzaSyAMn1gFj8ec-ciCBhsiMNpPW9_hT4bT5C0",
+    authDomain: "chat-d07cb.firebaseapp.com",
+    projectId: "chat-d07cb",
+    storageBucket: "chat-d07cb.appspot.com",
+    messagingSenderId: "147563868362",
+    appId: "1:147563868362:web:db23370602202dca978433",
+    measurementId: "G-MNCX5R04EN"
+  };
+
+  firebase.initializeApp(firebaseConfig);
+  const auth = firebase.auth();
+  const db = firebase.firestore();
+
+  const signInBtn = document.getElementById('sign-in');
+  const signOutBtn = document.getElementById('sign-out');
+  const userInfo = document.getElementById('user-info');
+  const messagesDiv = document.getElementById('messages');
+  const messageInput = document.getElementById('message-input');
+  const sendBtn = document.getElementById('send');
+
+  signInBtn.onclick = () => {
+    const provider = new firebase.auth.GoogleAuthProvider();
+    auth.signInWithPopup(provider);
+  };
+
+  signOutBtn.onclick = () => auth.signOut();
+
+  auth.onAuthStateChanged(user => {
+    if (user) {
+      userInfo.textContent = `Ви увійшли як: ${user.displayName}`;
+      signInBtn.style.display = 'none';
+      signOutBtn.style.display = 'inline-block';
+      sendBtn.disabled = false;
+    } else {
+      userInfo.textContent = '';
+      signInBtn.style.display = 'inline-block';
+      signOutBtn.style.display = 'none';
+      sendBtn.disabled = true;
+    }
+  });
+
+  sendBtn.onclick = () => {
+    const text = messageInput.value.trim();
+    if (text && auth.currentUser) {
+      db.collection("messages").add({
+        uid: auth.currentUser.uid,
+        name: auth.currentUser.displayName,
+        text: text,
+        timestamp: firebase.firestore.FieldValue.serverTimestamp()
+      });
+      messageInput.value = "";
+    }
+  };
+
+  db.collection("messages").orderBy("timestamp").onSnapshot(snapshot => {
+    messagesDiv.innerHTML = "";
+    snapshot.forEach(doc => {
+      const msg = doc.data();
+      const date = msg.timestamp?.toDate().toLocaleString() || '...';
+      const div = document.createElement("div");
+      div.className = "message";
+
+      const isOwner = auth.currentUser && msg.uid === auth.currentUser.uid;
+
+      div.innerHTML = `
+          <strong>${msg.name}</strong>:
+          <span id="text-${doc.id}">${msg.text}</span>
+          <small>${date}</small>
+          ${isOwner ? `
+            <button onclick="editMessage('${doc.id}', '${msg.text.replace(/'/g, "\\'")}')">✏️</button>
+            <button onclick="deleteMessage('${doc.id}')">🗑️</button>
+          ` : ""}
+        `;
+
+      messagesDiv.appendChild(div);
+    });
+    messagesDiv.scrollTop = messagesDiv.scrollHeight;
+  });
+
+  function editMessage(id, oldText) {
+    const newText = prompt("Редагувати повідомлення:", oldText);
+    if (newText && newText.trim() !== "") {
+      db.collection("messages").doc(id).update({
+        text: newText.trim()
+      });
+    }
+  }
+
+  function deleteMessage(id) {
+    if (confirm("Видалити повідомлення?")) {
+      db.collection("messages").doc(id).delete();
+    }
+  }
+</script>
+</body>
+</html>
